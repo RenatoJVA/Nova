@@ -1,63 +1,81 @@
-# Nova - ML Project
+# Nova Project
 
-This is a Machine Learning project for molecule analysis.
+Welcome to Nova, a molecule analysis project with an interactive web interface. This repository is structured as a monorepo to manage the project's different services.
 
-## Description
+## Monorepo Structure
 
-This project aims to process and analyze molecule data from different sources. It includes scripts for cleaning, structuring, and analyzing the data.
+This project uses a monorepo structure with the main packages located in the `packages` directory:
 
-## Installation
+-   `packages/frontend`: A React application (using Vite) that consumes data from the backend and visualizes it.
+-   `packages/backend`: An API server built with FastAPI that exposes the processed data.
+-   `packages/machine-learning`: A Python project for data processing, analysis, and future machine learning model training.
 
-This project uses `uv` for Python environment and package management.
+## Prerequisites
 
-1.  **Clone the repository:**
+Ensure you have the following tools installed before you begin:
+
+-   **Python** (version `>=3.13`)
+-   **[uv](https://github.com/astral-sh/uv)**: For Python package and virtual environment management.
+-   **[nvm](https://github.com/coreybutler/nvm-windows)**: To manage Node.js versions.
+-   **Node.js**: The required version is specified in the frontend's `.nvmrc` file (currently `v20`).
+-   **[Bun](https://bun.sh/)**: Used for frontend package management and script execution.
+
+## Project Setup
+
+Follow these steps to install all project dependencies.
+
+1.  **Install Python Dependencies:**
+    From the project's root directory, run:
     ```bash
-    git clone https://github.com/RenatoJVA/Nova.git
-    ```
-
-2.  **Create a virtual environment:**
-    ```bash
-    uv venv
-    ```
-
-3.  **Activate the virtual environment:**
-    *   On Windows:
-        ```bash
-        .venv\Scripts\activate
-        ```
-    *   On macOS and Linux:
-        ```bash
-        source .venv/bin/activate
-        ```
-
-4.  **Sync the environment:**
-    This will install all the dependencies from the `uv.lock` file.
-    ```bash
+    # Install all dependencies from pyproject.toml using the lockfile
     uv sync
     ```
 
-## Development
+2.  **Install Frontend Dependencies:**
+    ```bash
+    # 1. Navigate to the frontend directory
+    cd packages/frontend
 
-If you add or update dependencies in `pyproject.toml`, you need to update the lock file:
+    # 2. Install the required Node.js version with nvm
+    nvm install
 
+    # 3. Install frontend dependencies with Bun
+    bun install
+
+    # 4. Return to the root directory
+    cd ../..
+    ```
+
+## Running the Application
+
+To run the application, you will need **two separate terminals**, both opened at the **project's root directory**.
+
+#### Terminal 1: Start the Backend
+
+In your first terminal, run the following command to start the FastAPI server:
 ```bash
-uv lock
+uv run uvicorn packages.backend.main:app --reload
 ```
+The backend will be available at `http://127.0.0.1:8000`.
 
-## Usage
+#### Terminal 2: Start the Frontend
 
-To run the project, execute the main script:
-
+In your second terminal, run the following commands to start the React application:
 ```bash
-python main.py
+# 1. Navigate to the frontend directory
+cd packages/frontend
+
+# 2. Activate the correct Node.js version
+nvm use
+
+# 3. Run the Vite development server with Bun
+bun run dev
 ```
+The frontend will be available at `http://localhost:5173` (or the port specified by Vite).
 
-## Data
+## Running the Machine Learning Pipeline
 
-The project uses the following data sources:
-
-*   COCONUT_DB
-*   LOTUS_DB
-*   TTD_DB
-
-The data is located in the `data/base` directory. The processed data is saved in the `data/pre_processed` directory.
+If you need to run the data processing pipeline separately, you can do so with the following command from the project root:
+```bash
+uv run python packages/machine-learning/main.py
+```

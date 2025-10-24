@@ -9,4 +9,19 @@ wheels/
 # Virtual environments
 .venv
 
-data/base/**
+# Environment variables
+.env
+.env.*
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# IDE and editor directories
+.vscode/
+!.vscode/extensions.json
+.idea/
+
+# Log files
+*.log
+logs/
