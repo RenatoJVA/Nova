@@ -62,5 +62,6 @@ ENV/
 .vscode/
 
 # Machine Learning Data and Artifacts
-/data/
+/data/** */
 /artefacts/
+data/base/**
