@@ -60,3 +60,7 @@ ENV/
 # IDE files
 .idea/
 .vscode/
+
+# Machine Learning Data and Artifacts
+/data/
+/artefacts/
