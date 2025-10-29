@@ -62,6 +62,12 @@ ENV/
 .vscode/
 
 # Machine Learning Data and Artifacts
-/data/** */
-/artefacts/
-data/base/**
+/data/
+/artefacts/*
+!/artefacts/.gitignore
+
+# Sensitive data
+*.pem
+*.key
+config.json
+secrets.yml

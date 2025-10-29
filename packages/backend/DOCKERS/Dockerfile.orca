@@ -1,0 +1,96 @@
+#################################################################
+# 🧪 Dockerfile Multistage para ORCA (ultraligero)
+#################################################################
+
+ARG USERNAME=user
+ARG USER_UID=1003
+ARG USER_GID=1003
+ARG DEBIAN_FRONTEND=noninteractive
+
+########################################
+# Stage: builder - instalar ORCA
+########################################
+# Utilizamos el mismo 'ubuntu:24.04' como base del builder por compatibilidad inicial
+FROM ubuntu:24.04 AS builder
+ARG USERNAME
+ARG USER_UID
+ARG USER_GID
+ARG DEBIAN_FRONTEND
+ENV DEBIAN_FRONTEND=${DEBIAN_FRONTEND}
+# Dependencias necesarias para la instalación de ORCA
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    libopenmpi-dev \
+    openmpi-bin \
+    libfftw3-dev \
+    mpich \
+    gfortran \
+    libopenblas-dev \
+    liblapack-dev \
+    libfftw3-bin \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Crear usuario
+RUN groupadd -g ${USER_GID} -o ${USERNAME} && \
+    useradd -m -u ${USER_UID} -g ${USER_GID} -s /bin/bash ${USERNAME}
+
+WORKDIR /home/${USERNAME}/app
+
+# Copiar herramientas y el instalador de ORCA
+COPY --chown=${USERNAME}:${USERNAME} ./TOOLS ./TOOLS/
+RUN chmod +x ./TOOLS/orca_6_0_1_linux_x86-64_shared_openmpi416.run
+
+# Instalar ORCA como usuario normal
+USER ${USERNAME}
+# La instalación de ORCA crea la carpeta 'orca_6_0_1' en HOME.
+RUN ./TOOLS/orca_6_0_1_linux_x86-64_shared_openmpi416.run || true
+
+# Limpieza y preparación para la copia
+USER root
+RUN rm -rf ./TOOLS
+
+# Volvemos a root para la copia final (solo si fuera necesario mover fuera de HOME)
+# En este caso, ORCA se instala en /home/user/orca_6_0_1, que es accesible
+# y se copiará directamente al HOME del usuario final.
+########################################
+# Stage: final - runtime limpio (ORCA)
+########################################
+FROM debian:bookworm-slim
+ARG USERNAME
+ARG USER_UID
+ARG USER_GID
+ARG DEBIAN_FRONTEND
+
+ENV DEBIAN_FRONTEND=${DEBIAN_FRONTEND}
+
+# Dependencias de runtime: OpenMPI es crítico para ORCA, además de librerías de cálculo
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openmpi-bin \
+    libopenmpi-dev \
+    libfftw3-double3 \
+    libopenblas0 \
+    liblapack3 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Crear usuario
+RUN groupadd -g ${USER_GID} -o ${USERNAME} && \
+    useradd -m -u ${USER_UID} -g ${USER_GID} -s /bin/bash ${USERNAME}
+
+WORKDIR /home/${USERNAME}
+
+# Copiar ORCA (incluyendo la carpeta orca_6_0_1 de HOME)
+COPY --chown=${USERNAME}:${USERNAME} --from=builder /home/${USERNAME}/orca_6_0_1 /home/${USERNAME}/orca_6_0_1
+
+# ============================= 
+# Configuración
+# =============================
+# Añadir ORCA al PATH
+ENV PATH="/home/${USERNAME}/orca_6_0_1:${PATH}"
+
+# Cambiar a usuario no-root y definir el punto de entrada
+USER ${USERNAME}
+
+CMD ["bash"]

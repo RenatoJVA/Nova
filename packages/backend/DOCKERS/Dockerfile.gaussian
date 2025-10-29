@@ -1,0 +1,116 @@
+#################################################################
+# 🧪 Dockerfile Multistage para Gaussian 16 (ultraligero)
+#################################################################
+
+ARG USERNAME=user
+ARG USER_UID=1001
+ARG USER_GID=1001
+ARG DEBIAN_FRONTEND=noninteractive
+
+########################################
+# Stage: builder - instalar Gaussian
+########################################
+# 💡 CORRECCIÓN: Se añade la imagen base para el stage builder
+FROM ubuntu:24.04 AS builder
+ARG USERNAME
+ARG USER_UID
+ARG USER_GID
+ARG DEBIAN_FRONTEND=noninteractive
+ENV DEBIAN_FRONTEND=${DEBIAN_FRONTEND}
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    unzip \
+    bzip2 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Crear un usuario no-root para las operaciones del builder
+RUN groupadd -g ${USER_GID} -o ${USERNAME} && \
+    useradd -m -u ${USER_UID} -g ${USER_GID} -s /bin/bash ${USERNAME}
+
+# Cambiar a usuario no-root
+USER ${USERNAME}
+
+# Copiar carpeta Gaussian directamente (ya descomprimida)
+COPY --chown=${USERNAME}:${USERNAME} ./TOOLS/G_16 /tmp/G_16
+
+# El proceso de instalación se ejecuta con el usuario no-root
+RUN set -eux; \
+    echo "📦 Instalando Gaussian 16..."; \
+    cd /tmp; \
+    # Detectar la carpeta raíz
+    GDIR=$(find . -maxdepth 1 -type d -name "G_16" -o -name "g16*" | head -n 1); \
+    echo "📁 Carpeta detectada: $GDIR"; \
+    # Mover ejecutables g* (g16, gv, etc.) a /home/user/opt (no podemos mover a /opt como non-root)
+    mkdir -p /home/${USERNAME}/opt; \
+    mv "$GDIR"/g* /home/${USERNAME}/opt/; \
+    # Instalar componentes adicionales si existen
+    if [ -d /home/${USERNAME}/opt/g16/bsd ]; \
+    then \
+        cd /home/${USERNAME}/opt/g16/bsd && ./install || true; \
+    fi; \
+    # Ajuste opcional GView
+    if [ -f /home/${USERNAME}/opt/gv/gview.sh ]; \
+    then \
+        sed -i '/#    All Rights Reserved/a export LANG=en_US.UTF-8' /home/${USERNAME}/opt/gv/gview.sh; \
+    fi; \
+    # Limpieza
+    rm -rf /tmp/"$GDIR"
+
+# Volver a root brevemente para la transición de copia final
+USER root
+RUN mkdir -p /opt/g16_root_copy; \
+    cp -r /home/${USERNAME}/opt/g* /opt/g16_root_copy; \
+    chown -R root:root /opt/g16_root_copy; \
+    chmod -R 755 /opt/g16_root_copy
+    
+
+########################################
+# Stage: final - runtime limpio (Gaussian)
+########################################
+FROM debian:bookworm-slim
+ARG USERNAME
+ARG USER_UID
+ARG USER_GID
+ARG DEBIAN_FRONTEND
+
+ENV DEBIAN_FRONTEND=${DEBIAN_FRONTEND}
+
+# Dependencias mínimas de runtime
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    mpich \
+    gfortran \
+    ca-certificates \
+    bzip2 \
+    libgfortran5 \
+    libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Crear el usuario no-root
+RUN groupadd -g ${USER_GID} -o ${USERNAME} && \
+    useradd -m -u ${USER_UID} -g ${USER_GID} -s /bin/bash ${USERNAME}
+
+WORKDIR /home/${USERNAME}
+
+# Copiar Gaussian desde el builder
+COPY --from=builder /opt/g16_root_copy /opt
+
+# =============================
+# Configuración
+# =============================
+ENV g16root=/opt \
+    GAUSS_EXEDIR=/opt/g16 \
+    GAUSS_SCRDIR=/resp-02 \
+    GAUSS_MDEF=32GB \
+    PATH="/opt/g16:/opt/gv:${PATH}"
+
+# Configuración del perfil de Gaussian
+RUN echo 'source /opt/g16/bsd/g16.profile' >> /etc/bash.bashrc
+
+# Crear directorio scratch con permisos para el usuario
+RUN mkdir -p /resp-02 && chown -R ${USERNAME}:${USERNAME} /resp-02 && chmod 777 /resp-02
+
+# Cambiar a usuario no-root y definir el punto de entrada
+USER ${USERNAME}
+
+CMD ["bash"]

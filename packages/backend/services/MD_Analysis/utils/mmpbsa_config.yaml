@@ -1,0 +1,20 @@
+# Número de procesadores para MPI
+NP: 16
+
+# Ruta base donde están todas las simulaciones
+BASEDIR: "/resp-01/DPP4-08/"
+
+# Cada cuántos frames tomar datos para MMPBSA
+INTERVAL: 250
+
+# Índices para gmx_MMPBSA -cg
+GROUPS: [1, 13]
+
+# 
+NOGUI: "-nogui"
+CLEAN : "--clean"
+REWRITE: "-rewrite-output"
+# Nombres de archivos base
+TPR_PREFIX: ".tpr"
+XTC_SUFFIX: "-noPBC.xtc"
+TOP_SUFFIX: ".top"

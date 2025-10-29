@@ -60,3 +60,13 @@ ENV/
 # IDE files
 .idea/
 .vscode/
+
+# Sensitive data
+*.pem
+*.key
+config.json
+secrets.yml
+
+# Data and results
+/data/
+/results/

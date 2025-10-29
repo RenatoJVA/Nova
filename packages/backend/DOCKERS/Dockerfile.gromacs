@@ -1,0 +1,115 @@
+#################################################################
+# 🧪 Dockerfile Multistage para GROMACS (con soporte CUDA)
+#################################################################
+
+ARG USERNAME=user
+ARG USER_UID=1000
+ARG USER_GID=1000
+ARG DEBIAN_FRONTEND=noninteractive
+
+########################################
+# Stage: builder - compilar GROMACS
+########################################
+FROM nvidia/cuda:12.9.1-cudnn-devel-ubuntu24.04 AS builder
+ARG USERNAME
+ARG USER_UID
+ARG USER_GID
+ARG DEBIAN_FRONTEND
+
+ENV DEBIAN_FRONTEND=${DEBIAN_FRONTEND}
+
+# Instalar dependencias de compilación
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    git \
+    wget \
+    curl \
+    libfftw3-dev \
+    mpich \
+    ca-certificates \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+WORKDIR /opt
+
+# Descargar y compilar GROMACS SP y DP
+RUN wget https://ftp.gromacs.org/gromacs/gromacs-2024.4.tar.gz && \
+    tar xfz gromacs-2024.4.tar.gz && rm gromacs-2024.4.tar.gz && \
+    cd gromacs-2024.4 && mkdir build && cd build && \
+    CC=gcc CXX=g++ cmake .. \
+      -DGMX_OPENMP=ON \
+      -DGMX_BUILD_OWN_FFTW=ON \
+      -DREGRESSIONTEST_DOWNLOAD=ON \
+      -DGMX_GPU=CUDA \
+      -DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda \
+      -DGMX_FFT_LIBRARY=fftw3 \
+      -DGMX_PYTHON_PACKAGE=OFF \
+      -DGMX_PREFER_STATIC_LIBS=ON && \
+    make -j"$(nproc)" && make install && \
+    cd ../ && rm -rf build && mkdir build && cd build && \
+    CC=gcc CXX=g++ cmake .. \
+      -DGMX_OPENMP=ON \
+      -DGMX_BUILD_OWN_FFTW=ON \
+      -DREGRESSIONTEST_DOWNLOAD=ON \
+      -DGMX_FFT_LIBRARY=fftw3 \
+      -DGMX_PYTHON_PACKAGE=OFF \
+      -DGMX_PREFER_STATIC_LIBS=ON \
+      -DGMX_DOUBLE=on && \
+    make -j"$(nproc)" && make install
+
+########################################
+# Stage: final - runtime con CUDA (GROMACS)
+########################################
+FROM nvidia/cuda:12.9.1-cudnn-runtime-ubuntu24.04
+ARG USERNAME
+ARG USER_UID
+ARG USER_GID
+ARG DEBIAN_FRONTEND
+
+ENV DEBIAN_FRONTEND=${DEBIAN_FRONTEND} \
+    GMX_MAXBACKUP=999
+
+# Crear usuario con UID/GID del host
+RUN groupadd --gid $USER_GID $USERNAME && \
+    useradd --uid $USER_UID --gid $USER_GID -m -s /bin/bash $USERNAME
+
+# Instalar solo las dependencias necesarias para ejecutar
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libfftw3-single3 \
+    libfftw3-double3 \
+    mpich \
+    openjdk-17-jre \
+    curl \
+    ca-certificates \
+    python3 \
+    python3-dev \
+    sudo \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+    && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# Instalar Nextflow
+WORKDIR /usr/local/bin
+RUN curl -s https://get.nextflow.io | bash && chmod +x nextflow
+
+# Copiar los archivos de GROMACS compilados
+COPY --from=builder /usr/local/gromacs /usr/local/gromacs
+
+# =============================
+# Configuración
+# =============================
+RUN echo -e "\n# GROMACS Configuration\nsource /usr/local/gromacs/bin/GMXRC\nexport GMX_MAXBACKUP=999" \
+    >> /etc/bash.bashrc && \
+    echo -e "\n# GROMACS Configuration\nsource /usr/local/gromacs/bin/GMXRC\nexport GMX_MAXBACKUP=999" \
+    >> /home/$USERNAME/.bashrc && \
+    chown -R $USERNAME:$USERNAME /usr/local/gromacs
+
+ENV PATH=/usr/local/gromacs/bin:$PATH
+
+# Crear directorio de trabajo con permisos apropiados
+RUN mkdir -p /workspace && chown $USERNAME:$USERNAME /workspace
+WORKDIR /workspace
+
+# Cambiar a usuario no-root y definir el punto de entrada
+USER $USERNAME
+
+CMD ["bash"]

@@ -1,0 +1,28 @@
+# Python-generated files
+__pycache__/
+scripts/__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+results/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Sensitive data
+*.pem
+*.key
+config.json
+secrets.yml
+
+# Data
+/data/
+/input/

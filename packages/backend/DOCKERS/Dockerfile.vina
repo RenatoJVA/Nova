@@ -1,0 +1,69 @@
+#################################################################
+# 🧪 Dockerfile Multistage para AutoDock Vina (ultraligero)
+#################################################################
+
+ARG USERNAME=user
+ARG USER_UID=1000
+ARG USER_GID=1000
+ARG DEBIAN_FRONTEND=noninteractive
+# Moved ENV for DEBIAN_FRONTEND into each stage to avoid requiring an ENV before the first FROM
+# (some Docker versions/platforms error when ENV appears before FROM).
+
+########################################
+# Stage: builder - copiar binario Vina
+# Usamos 'ubuntu:24.04' solo como base temporal para copiar archivos
+FROM ubuntu:24.04 AS builder
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Copiar el binario de Vina
+COPY ./TOOLS/vina /usr/local/bin/vina
+
+# Solo asegurar que el archivo tiene permisos de ejecución antes de copiar
+RUN chmod +x /usr/local/bin/vina
+RUN chmod +x /usr/local/bin/vina
+
+########################################
+# Stage: final - runtime limpio (Vina)
+########################################
+FROM debian:bookworm-slim
+ARG USERNAME
+ARG USER_UID
+ARG USER_GID
+ARG DEBIAN_FRONTEND
+
+ENV DEBIAN_FRONTEND=${DEBIAN_FRONTEND}
+
+# Dependencias mínimas de runtime para Vina (ajustar si faltan librerías)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libstdc++6 \
+    # Vina es un binario que probablemente necesite la glibc y otras librerías básicas
+    # que debian-slim ya incluye o se pueden añadir si el binario lo requiere.
+    && rm -rf /var/lib/apt/lists/*
+
+# Crear usuario
+RUN groupadd -g ${USER_GID} -o ${USERNAME} && \
+    useradd -m -u ${USER_UID} -g ${USER_GID} -s /bin/bash ${USERNAME}
+
+WORKDIR /home/${USERNAME}/app
+
+# Copiar el binario Vina desde el builder
+COPY --from=builder /usr/local/bin/vina /usr/local/bin/vina
+
+# Copiar otros archivos de la carpeta TOOLS (por si se necesitan)
+COPY --chown=${USERNAME}:${USERNAME} ./TOOLS ./TOOLS/
+COPY --chown=${USERNAME}:${USERNAME} ./src ./src/
+
+
+# Asegurar permisos para el binario (aunque ya se hizo, se mantiene)
+RUN chmod +x /usr/local/bin/vina
+
+# =============================
+# Configuración
+# =============================
+# Vina ya está en el PATH de la imagen base por la ruta /usr/local/bin
+
+# Cambiar a usuario no-root y definir el punto de entrada
+USER ${USERNAME}
+
+CMD ["bash"]

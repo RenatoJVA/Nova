@@ -1,3 +1,4 @@
+# Ignore data, models, and reports generated within the artefacts directory.
 /data
 /models
 /reports
